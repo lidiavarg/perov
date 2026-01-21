@@ -1,0 +1,16 @@
+[project]
+name = "perov"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "docling",
+    "torch>=2.10.0",
+]
+
+[tool.uv]
+package = true
+
+[project.scripts]
+perov = "perov.main:main"
