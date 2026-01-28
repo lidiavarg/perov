@@ -1,0 +1,264 @@
+version: 2
+
+defaults:
+  flags: [MULTILINE]
+
+stages:
+  - pre
+  - structure
+  - links
+  - assets
+  - math
+  - pages
+  - chemistry
+  - post
+
+rules:
+  # ----------------------------
+  # PRE: low-risk cleanup
+  # ----------------------------
+  - id: collapse_blank_lines_pre
+    stage: pre
+    scope: all
+    find: "\n{3,}"
+    replace: "\n\n"
+
+  - id: join_soft_hyphenated_words_across_newline
+    stage: pre
+    scope: text
+    # inter-\nface -> interface (lowercase only)
+    find: "(?m)(?<=[a-z])-(\\s*)\\n(\\s*)(?=[a-z])"
+    replace: ""
+
+  - id: remove_escaped_star_brackets
+    stage: pre
+    scope: text
+    # removes literal "[\*]" artifacts
+    find: "\\[\\\\\\*\\]"
+    replace: ""
+
+  - id: unescape_backslash_star
+    stage: pre
+    scope: text
+    # "\*" -> "*"
+    find: "\\\\(\\*)"
+    replace: "\\1"
+
+  - id: drop_acs_cite_this_male
+    stage: pre
+    scope: text
+    # "**♂ Cite This:** ..." line (if present)
+    find: "(?m)^\\*\\*\\s*♂\\s*Cite This:\\s*\\*\\*.*\\n?"
+    replace: ""
+
+  # ----------------------------
+  # STRUCTURE
+  # ----------------------------
+  - id: heading_bold_cleanup
+    stage: structure
+    scope: text
+    find: "^(#{1,6})\\s+\\*\\*(.+?)\\*\\*\\s*$"
+    replace: "\\1 \\2"
+
+  - id: square_bullet_to_h2
+    stage: structure
+    scope: text
+    find: "^\\s*#?\\s*■\\s*(.+?)\\s*$"
+    replace: "## \\1"
+
+  - id: dot_bullet_to_dash
+    stage: structure
+    scope: text
+    flags: [MULTILINE]
+    find: "^\\s*•\\s+"
+    replace: "- "
+
+  # ----------------------------
+  # LINKS (ACS cleanups)
+  # scope=links runs on whole doc in your engine; keep patterns URL-specific
+  # ----------------------------
+  - id: strip_ref_pdf
+    stage: links
+    scope: links
+    find: "\\((https?://pubs\\.acs\\.org/[^)]+?)\\?ref=pdf[^)]*\\)"
+    replace: "(\\1)"
+
+  - id: drop_acs_action_dosearch_url_keep_text
+    stage: links
+    scope: links
+    find: "\\((https?://pubs\\.acs\\.org/action/doSearch[^)]+)\\)"
+    replace: ""
+
+  - id: strip_urlappend_ref_pdf
+    stage: links
+    scope: links
+    find: "\\?urlappend=%3Fref%3DPDF(?:&[^\\s\\)]+)*"
+    replace: ""
+
+  - id: drop_empty_parens
+    stage: links
+    scope: all
+    find: "\\(\\s*\\)"
+    replace: ""
+
+  # ----------------------------
+  # ASSETS (lightweight; python also enforces)
+  # ----------------------------
+  - id: asset_force_line_start
+    stage: assets
+    scope: all
+    find: "(?m)(?<!\\n)\\[\\[ASSET:"
+    replace: "\n[[ASSET:"
+
+  - id: asset_force_line_end
+    stage: assets
+    scope: all
+    find: "(?m)(\\[\\[ASSET:[^\\n]*\\]\\])(?!\\n)"
+    replace: "\\1\n"
+
+  # ----------------------------
+  # MATH
+  # ----------------------------
+  - id: fix_lambda_xray_typo
+    stage: math
+    scope: math
+    find: "\\\\lambda_\\{X-?rav\\}"
+    replace: "\\\\lambda_{X-ray}"
+
+  - id: fix_xrav_word_math
+    stage: math
+    scope: math
+    find: "\\bX-?rav\\b"
+    replace: "X-ray"
+
+  - id: tighten_math_punct
+    stage: math
+    scope: text
+    # "$...$ ," -> "$...$,"
+    find: "(\\$[^$]+\\$)\\s+([\\.,;:])"
+    replace: "\\1\\2"
+
+  # ----------------------------
+  # PAGES
+  # ----------------------------
+  - id: page_split_if_glued
+    stage: pages
+    scope: all
+    find: "(?m)(\\S)\\[\\[PAGE:(\\d+):(\\d+)\\]\\]"
+    replace: "\\1\n\n[[PAGE:\\2:\\3]]"
+
+  - id: page_force_line_start
+    stage: pages
+    scope: all
+    find: "(?m)(?<!\\n)\\[\\[PAGE:(\\d+):(\\d+)\\]\\]"
+    replace: "\n\n[[PAGE:\\1:\\2]]"
+
+  - id: page_force_line_end
+    stage: pages
+    scope: all
+    find: "(?m)(\\[\\[PAGE:\\d+:\\d+\\]\\])(?!\\n)"
+    replace: "\\1\n\n"
+
+  # ----------------------------
+  # CHEMISTRY (text-level helpers; underscore fix is done in python)
+  # ----------------------------
+  - id: chem_dash_char_normalize
+    stage: chemistry
+    scope: text
+    # A−B / A–B / A—B -> A-B (only element symbols)
+    find: "([A-Z][a-z]?)[\\u2212\\u2013\\u2014]([A-Z][a-z]?)"
+    replace: "\\1-\\2"
+
+  - id: chem_join_element_chain_across_newlines
+    stage: chemistry
+    scope: text
+    # Pb-\nBr -> Pb-Br
+    find: "(?m)([A-Z][a-z]?)\\s*-\\s*\\n\\s*([A-Z][a-z]?)"
+    replace: "\\1-\\2"
+
+  # ----------------------------
+  # POST: ACS front matter + safe star handling
+  # ----------------------------
+  - id: drop_acs_downloaded_via_line
+    stage: post
+    scope: text
+    flags: [MULTILINE, IGNORECASE]
+    find: "^Downloaded via .*?$"
+    replace: ""
+
+  - id: drop_acs_sharingguidelines_line
+    stage: post
+    scope: text
+    flags: [MULTILINE, IGNORECASE]
+    find: "^See https?://pubs\\.acs\\.org/sharingguidelines.*$"
+    replace: ""
+
+  - id: drop_affiliation_lines_starting_with_caret
+    stage: post
+    scope: text
+    flags: [MULTILINE]
+    # lines like "^Nanochemistry Department, ..."
+    find: "^\\^[^\\n]+\\n?"
+    replace: ""
+
+  - id: drop_supporting_info_page_artifact
+    stage: post
+    scope: text
+    flags: [MULTILINE]
+    find: "^\\s*S-\\d+\\s*$"
+    replace: ""
+
+  - id: fix_xray_word
+    stage: post
+    scope: text
+    find: "\\bX\\s?ray\\b"
+    replace: "X-ray"
+
+  - id: fix_orcid_typo
+    stage: post
+    scope: text
+    find: "\\boccid\\.org\\b"
+    replace: "orcid.org"
+
+  - id: fix_missing_initial_s_in_since
+    stage: post
+    scope: text
+    find: "(?m)^(\\s*)ince\\b"
+    replace: "\\1Since"
+
+  # Safe removal of corresponding-author token stars (NOT markdown italics)
+  - id: remove_corresponding_author_star_token
+    stage: post
+    scope: text
+    flags: [MULTILINE]
+    # ", *," -> ", "
+    find: ",\\s*\\*\\s*,"
+    replace: ", "
+
+  - id: remove_author_star_after_word_before_comma
+    stage: post
+    scope: text
+    flags: [MULTILINE]
+    # "Baranov*," -> "Baranov,"
+    # (requires a letter right before *, so it won't hit list bullets etc.)
+    find: "(?<=\\b[A-Za-z])\\*\\s*,"
+    replace: ","
+
+  # Safety nets for leftover escaped tags (late-unescape may reveal them)
+  - id: drop_leftover_html_escaped_sup_blocks
+    stage: post
+    scope: text
+    find: "(?i)\\^?&lt;sup&gt;\\s*[†‡*]\\s*&lt;/sup&gt;"
+    replace: ""
+
+  - id: drop_leftover_html_escaped_subsup_tags_any
+    stage: post
+    scope: text
+    find: "(?i)&lt;/?(?:sup|sub)&gt;"
+    replace: ""
+
+  - id: collapse_blank_lines_post
+    stage: post
+    scope: all
+    find: "\n{3,}"
+    replace: "\n\n"
